@@ -41,6 +41,8 @@ public class MainActivity extends AppCompatActivity
 
     private DailyForecastAdapter dailyForecastAdapter;
     private RecyclerView dailyForecastRecyclerView;
+    private HourlyForecastAdapter hourlyForecastAdapter;
+    private RecyclerView hourlyForecastRecyclerView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -54,6 +56,7 @@ public class MainActivity extends AppCompatActivity
 
 
     }
+
     public void getDarkSkyData(double lat, double lon, String apikey) {
         GetDarkSkyDataService service = DarkSkyRetrofitInstance.getDarkSkyRetofitInstance().create(GetDarkSkyDataService.class);
         Call<WeatherData> call = service.getForecast(Double.toString(lat), Double.toString(lon), apikey);
@@ -71,6 +74,14 @@ public class MainActivity extends AppCompatActivity
                 dailyForecastRecyclerView.setLayoutManager(dailyForecastLayoutManager);
                 dailyForecastRecyclerView.setItemAnimator(new DefaultItemAnimator());
                 dailyForecastRecyclerView.setAdapter(dailyForecastAdapter);
+
+                hourlyForecastAdapter = new HourlyForecastAdapter(weatherData.getHourly().getData());
+                RecyclerView.LayoutManager hourlyForecastLayoutManager = new LinearLayoutManager(getApplicationContext(), LinearLayoutManager.HORIZONTAL, false);
+                hourlyForecastRecyclerView = findViewById(R.id.hourlyForecastRecycler);
+                hourlyForecastRecyclerView.setLayoutManager(hourlyForecastLayoutManager);
+                hourlyForecastRecyclerView.setItemAnimator(new DefaultItemAnimator());
+                hourlyForecastRecyclerView.setAdapter(hourlyForecastAdapter);
+
 
             }
 
@@ -93,6 +104,7 @@ public class MainActivity extends AppCompatActivity
         viewPager.setAdapter(adapter);
         tabLayout.setupWithViewPager(viewPager);
     }
+
     private void defaultInit() {
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
@@ -103,6 +115,7 @@ public class MainActivity extends AppCompatActivity
             public void onClick(View view) {
                 Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
                         .setAction("Action", null).show();
+                getDarkSkyData(41.216932,-96.1678416,"7d6f4a8df38879f75828056048610703");
             }
         });
 
