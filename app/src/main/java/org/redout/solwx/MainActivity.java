@@ -1,5 +1,10 @@
 package org.redout.solwx;
 
+import android.content.Context;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.os.Bundle;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
@@ -28,9 +33,16 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.TextView;
 
+import org.redout.solwx.weather.BarometerData;
+import org.redout.solwx.weather.GetWeatherTask;
 import org.redout.solwx.weather.darksky.DarkSkyRetrofitInstance;
+import org.redout.solwx.weather.darksky.DarkSkyServiceBundle;
 import org.redout.solwx.weather.darksky.GetDarkSkyDataService;
 import org.redout.solwx.weather.darksky.generated.WeatherData;
+
+import java.io.IOException;
+import java.util.Date;
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity
         implements NavigationView.OnNavigationItemSelectedListener {
@@ -39,10 +51,8 @@ public class MainActivity extends AppCompatActivity
     private TabLayout tabLayout;
     private ViewPager viewPager;
 
-    private DailyForecastAdapter dailyForecastAdapter;
-    private RecyclerView dailyForecastRecyclerView;
-    private HourlyForecastAdapter hourlyForecastAdapter;
-    private RecyclerView hourlyForecastRecyclerView;
+    private SensorManager sensorManager;
+    private Sensor pressureSensor;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -53,43 +63,40 @@ public class MainActivity extends AppCompatActivity
         setupTabs();
         getDarkSkyData(41.216932,-96.1678416,"7d6f4a8df38879f75828056048610703");
 
+        sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
+        pressureSensor = sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE);
 
 
+
+
+
+
+
+    }
+    public void capturePressureData(Context context, float pressure) {
+        AppDatabase db = AppDatabase.getAppDatabase(context);
+        BarometerData bdata = new BarometerData();
+        bdata.setBarometer(Double.valueOf(pressure));
+        bdata.setObservedDate(new Date().getTime());
+        db.barometerDataDAO().insertAll(bdata);
+
+        List<BarometerData> recordedData = db.barometerDataDAO().getAll();
+        for (BarometerData b : recordedData) {
+            System.out.println(b.getObservedDate() + " - " + b.getBarometer());
+        }
     }
 
     public void getDarkSkyData(double lat, double lon, String apikey) {
         GetDarkSkyDataService service = DarkSkyRetrofitInstance.getDarkSkyRetofitInstance().create(GetDarkSkyDataService.class);
-        Call<WeatherData> call = service.getForecast(Double.toString(lat), Double.toString(lon), apikey);
-        call.enqueue(new Callback<WeatherData>() {
-            @Override
-            public void onResponse(Call<WeatherData> call, Response<WeatherData> response) {
-                System.out.println("URL :" +call.request().url());
-                WeatherData weatherData = response.body();
-                TextView currentTemp = findViewById(R.id.currentTemp);
-                currentTemp.setText(response.body().getCurrently().getTemperature().toString());
+        DarkSkyServiceBundle serviceBundle= new DarkSkyServiceBundle();
+        serviceBundle.setLat(lat);
+        serviceBundle.setLon(lon);
+        serviceBundle.setApiKey(apikey);
+        serviceBundle.setService(service);
 
-                dailyForecastAdapter = new DailyForecastAdapter(weatherData.getDaily().getData());
-                RecyclerView.LayoutManager dailyForecastLayoutManager = new LinearLayoutManager(getApplicationContext(), LinearLayoutManager.HORIZONTAL, false);
-                dailyForecastRecyclerView = findViewById(R.id.dailyForecastRecycler);
-                dailyForecastRecyclerView.setLayoutManager(dailyForecastLayoutManager);
-                dailyForecastRecyclerView.setItemAnimator(new DefaultItemAnimator());
-                dailyForecastRecyclerView.setAdapter(dailyForecastAdapter);
-
-                hourlyForecastAdapter = new HourlyForecastAdapter(weatherData.getHourly().getData());
-                RecyclerView.LayoutManager hourlyForecastLayoutManager = new LinearLayoutManager(getApplicationContext(), LinearLayoutManager.HORIZONTAL, false);
-                hourlyForecastRecyclerView = findViewById(R.id.hourlyForecastRecycler);
-                hourlyForecastRecyclerView.setLayoutManager(hourlyForecastLayoutManager);
-                hourlyForecastRecyclerView.setItemAnimator(new DefaultItemAnimator());
-                hourlyForecastRecyclerView.setAdapter(hourlyForecastAdapter);
-
-
-            }
-
-            @Override
-            public void onFailure(Call<WeatherData> call, Throwable t) {
-                Log.e("Error getting Current Conditions : ", t.getMessage());
-            }
-        });
+        GetWeatherTask getWeather = new GetWeatherTask(this);
+        System.out.println("calling service");
+        getWeather.execute(serviceBundle);
 
     }
 
@@ -186,4 +193,34 @@ public class MainActivity extends AppCompatActivity
         drawer.closeDrawer(GravityCompat.START);
         return true;
     }
+
+    private SensorEventListener sensorEventListener = new SensorEventListener() {
+        @Override
+        public void onSensorChanged(SensorEvent sensorEvent) {
+            float[] values = sensorEvent.values;
+            //Update DB
+            capturePressureData(getApplicationContext(), values[0]);
+        }
+
+        @Override
+        public void onAccuracyChanged(Sensor sensor, int i) {
+
+        }
+    };
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        System.out.println("Registering Pressure Listener");
+        sensorManager.unregisterListener(sensorEventListener);
+        sensorManager.registerListener(sensorEventListener, pressureSensor,1000000);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        sensorManager.unregisterListener(sensorEventListener);
+        sensorManager.registerListener(sensorEventListener, pressureSensor,30000000);
+    }
+
 }
